@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# model weights (use Git LFS if you want to version this)
+Foodimg2Ing/data/modelbest.ckpt
+
+# uploads
+Foodimg2Ing/static/images/demo_imgs/
