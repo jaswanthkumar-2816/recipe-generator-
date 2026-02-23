@@ -2,13 +2,11 @@
 # NOTE: Some original pins (e.g., tensorflow==2.5.0) are not available for Python 3.9 on macOS.
 # The versions below are adjusted to be installable in a Python 3.9 virtual environment.
 
+--extra-index-url https://download.pytorch.org/whl/cpu
 gunicorn==20.1.0
-
-# F:\PROJECTS\Flask Projects\Recipe Generation from Food Image\Foodimg2Ing\utils\ims2file.py: 4
 tqdm==4.47.0
 
 
---index-url https://download.pytorch.org/whl/cpu
 torch==1.13.1
 torchvision==0.14.1
 
