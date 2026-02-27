@@ -31,6 +31,10 @@ def _get_assets():
         return _MODEL, _DEVICE, _INGRS_VOCAB, _INSTR_VOCAB, _TO_INPUT_TRANSF
 
     import urllib.request
+    import torch
+    
+    # Set PyTorch to use 1 thread to save memory on Render's free tier
+    torch.set_num_threads(1)
     
     # Ensure data directory exists
     os.makedirs(_DATA_DIR, exist_ok=True)
