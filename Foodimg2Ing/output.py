@@ -15,56 +15,81 @@ import time
 from Foodimg2Ing import app
 
 
+# ---- Global caches (loaded once per Gunicorn worker) ----
+_DATA_DIR = os.path.join(app.root_path, 'data')
+_INGRS_VOCAB = None
+_INSTR_VOCAB = None
+_MODEL = None
+_DEVICE = None
+_TO_INPUT_TRANSF = None
+
+
+def _get_assets():
+    global _INGRS_VOCAB, _INSTR_VOCAB, _MODEL, _DEVICE, _TO_INPUT_TRANSF
+
+    if _MODEL is not None:
+        return _MODEL, _DEVICE, _INGRS_VOCAB, _INSTR_VOCAB, _TO_INPUT_TRANSF
+
+    import urllib.request
+    
+    # Ensure data directory exists
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    
+    # Files to download if they don't exist
+    files_to_download = {
+        'modelbest.ckpt': 'https://dl.fbaipublicfiles.com/inversecooking/modelbest.ckpt',
+        'ingr_vocab.pkl': 'https://dl.fbaipublicfiles.com/inversecooking/ingr_vocab.pkl',
+        'instr_vocab.pkl': 'https://dl.fbaipublicfiles.com/inversecooking/instr_vocab.pkl'
+    }
+    
+    for filename, url in files_to_download.items():
+        filepath = os.path.join(_DATA_DIR, filename)
+        if not os.path.exists(filepath):
+            print(f"Downloading {filename}...")
+            urllib.request.urlretrieve(url, filepath)
+            print(f"Downloaded {filename}.")
+
+    use_gpu = True
+    _DEVICE = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
+    map_loc = None if torch.cuda.is_available() and use_gpu else 'cpu'
+
+    _INGRS_VOCAB = pickle.load(open(os.path.join(_DATA_DIR, 'ingr_vocab.pkl'), 'rb'))
+    _INSTR_VOCAB = pickle.load(open(os.path.join(_DATA_DIR, 'instr_vocab.pkl'), 'rb'))
+
+    ingr_vocab_size = len(_INGRS_VOCAB)
+    instrs_vocab_size = len(_INSTR_VOCAB)
+
+    import sys
+    sys.argv = ['']
+    args = get_parser()
+    args.maxseqlen = 15
+    args.ingrs_only = False
+
+    _MODEL = get_model(args, ingr_vocab_size, instrs_vocab_size)
+
+    # Load the pre-trained model parameters
+    model_path = os.path.join(_DATA_DIR, 'modelbest.ckpt')
+    _MODEL.load_state_dict(torch.load(model_path, map_location=map_loc))
+    _MODEL.to(_DEVICE)
+    _MODEL.eval()
+    _MODEL.ingrs_only = False
+    _MODEL.recipe_only = False
+
+    # Precompute tensor transform
+    _TO_INPUT_TRANSF = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+
+    return _MODEL, _DEVICE, _INGRS_VOCAB, _INSTR_VOCAB, _TO_INPUT_TRANSF
+
+
 def output(uploadedfile):
 
     # Keep all the codes and pre-trained weights in data directory
-    data_dir=os.path.join(app.root_path,'data')
+    data_dir = _DATA_DIR
 
-
-    # code will run in gpu if available and if the flag is set to True, else it will run on cpu
-    use_gpu = True
-    device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
-    map_loc = None if torch.cuda.is_available() and use_gpu else 'cpu'
-
-
-
-    # code below was used to save vocab files so that they can be loaded without Vocabulary class
-    ingrs_vocab = pickle.load(open(os.path.join(data_dir, 'ingr_vocab.pkl'), 'rb'))
-    vocab = pickle.load(open(os.path.join(data_dir, 'instr_vocab.pkl'), 'rb'))
-
-    ingr_vocab_size = len(ingrs_vocab)
-    instrs_vocab_size = len(vocab)
-    output_dim = instrs_vocab_size
-
-    
-
-    t = time.time()
-    import sys; sys.argv=['']; del sys
-    args = get_parser()
-    args.maxseqlen = 15
-    args.ingrs_only=False
-    model=get_model(args, ingr_vocab_size, instrs_vocab_size)
-   
-    # Load the pre-trained model parameters
-    model_path = os.path.join(data_dir, 'modelbest.ckpt')
-    model.load_state_dict(torch.load(model_path, map_location=map_loc))
-    model.to(device)
-    model.eval()
-    model.ingrs_only = False
-    model.recipe_only = False
-   
-
-
-    transf_list_batch = []
-    transf_list_batch.append(transforms.ToTensor())
-    transf_list_batch.append(transforms.Normalize((0.485, 0.456, 0.406), 
-                                                (0.229, 0.224, 0.225)))
-    to_input_transf = transforms.Compose(transf_list_batch)
-
-    greedy = [True, False]
-    beam = [-1, -1]
-    temperature = 1.0
-    numgens = len(greedy)
+    model, device, ingrs_vocab, vocab, to_input_transf = _get_assets()
 
     uploaded_file = uploadedfile
 
@@ -84,27 +109,27 @@ def output(uploadedfile):
     title=[]
     ingredients=[]
     recipe=[]
-    for i in range(numgens):
+    for i in range(num_valid):
         with torch.no_grad():
-            outputs = model.sample(image_tensor, greedy=greedy[i], 
-                                temperature=temperature, beam=beam[i], true_ingrs=None)
-                
+            outputs = model.sample(image_tensor, greedy=True,
+                                temperature=1.0, beam=-1, true_ingrs=None)
+
         ingr_ids = outputs['ingr_ids'].cpu().numpy()
         recipe_ids = outputs['recipe_ids'].cpu().numpy()
-                
+
         outs, valid = prepare_output(recipe_ids[0], ingr_ids[0], ingrs_vocab, vocab)
-            
+
         if valid['is_valid'] or show_anyways:
-                
+
             title.append(outs['title'])
 
             ingredients.append(outs['ingrs'])
 
             recipe.append(outs['recipe'])
-            
+
 
         else:
             title.append("Not a valid recipe!")
             recipe.append("Reason: "+valid['reason'])
-            
+
     return title,ingredients,recipe
