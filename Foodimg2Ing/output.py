@@ -69,7 +69,14 @@ def _get_assets():
 
     # Load the pre-trained model parameters
     model_path = os.path.join(_DATA_DIR, 'modelbest.ckpt')
-    _MODEL.load_state_dict(torch.load(model_path, map_location=map_loc))
+    state_dict = torch.load(model_path, map_location=map_loc)
+    _MODEL.load_state_dict(state_dict)
+    
+    # Free up memory
+    del state_dict
+    import gc
+    gc.collect()
+
     _MODEL.to(_DEVICE)
     _MODEL.eval()
     _MODEL.ingrs_only = False
