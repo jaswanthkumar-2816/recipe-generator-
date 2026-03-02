@@ -116,13 +116,15 @@ def output(uploadedfile):
     image_transf = transform(img)
     image_tensor = to_input_transf(image_transf).unsqueeze(0).to(device)
 
-    num_valid = 1
+    num_valid = 2
     title=[]
     ingredients=[]
     recipe=[]
     for i in range(num_valid):
         with torch.no_grad():
-            outputs = model.sample(image_tensor, greedy=True,
+            # For the first one use greedy, for the second use random sampling to get a different result
+            greedy_sample = (i == 0)
+            outputs = model.sample(image_tensor, greedy=greedy_sample,
                                 temperature=1.0, beam=-1, true_ingrs=None)
 
         ingr_ids = outputs['ingr_ids'].cpu().numpy()
@@ -131,16 +133,12 @@ def output(uploadedfile):
         outs, valid = prepare_output(recipe_ids[0], ingr_ids[0], ingrs_vocab, vocab)
 
         if valid['is_valid'] or show_anyways:
-
             title.append(outs['title'])
-
             ingredients.append(outs['ingrs'])
-
             recipe.append(outs['recipe'])
-
-
         else:
             title.append("Not a valid recipe!")
+            ingredients.append([]) # Append empty list to avoid IndexError in template
             recipe.append("Reason: "+valid['reason'])
 
     return title,ingredients,recipe
