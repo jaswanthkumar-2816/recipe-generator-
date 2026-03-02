@@ -81,21 +81,29 @@ def prepare_output(ids, gen_ingrs, ingr_vocab_list, vocab):
         prev_word = word
 
     toks = prettify(toks, replace_dict)
-    title = toks[0]
-    toks = toks[1:]
+    
+    if len(toks) > 0:
+        title = toks[0]
+        toks = toks[1:]
+    else:
+        title = "No title generated"
+        toks = []
+        is_valid = False
+        reason = 'No tokens generated'
 
     if gen_ingrs is not None:
         gen_ingrs = get_ingrs(gen_ingrs, ingr_vocab_list)
 
-    if score <= 0.3:
-        reason = 'Diversity score.'
-        is_valid = False
-    elif len(toks) != len(set(toks)):
-        reason = 'Repeated instructions.'
-        is_valid = False
-    elif found_repeat:
-        reason = 'Found word repeat.'
-        is_valid = False
+    if is_valid: # Only check these if we haven't already failed
+        if score <= 0.3:
+            reason = 'Diversity score.'
+            is_valid = False
+        elif len(toks) != len(set(toks)):
+            reason = 'Repeated instructions.'
+            is_valid = False
+        elif found_repeat:
+            reason = 'Found word repeat.'
+            is_valid = False
 
     valid = {'is_valid': is_valid, 'reason': reason, 'score': score}
     outs = {'title': title, 'recipe': toks, 'ingrs': gen_ingrs}
