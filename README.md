@@ -1,4 +1,15 @@
+---
+title: Recipe Generation from Food Image
+emoji: 🍳
+colorFrom: yellow
+colorTo: red
+sdk: docker
+app_port: 10000
+pinned: false
+---
+
 ![ViewCount](https://views.whatilearened.today/views/github/navassherif98/Recipe-Generation-from-Food-Image.svg?cache=remove)
+
 
 # Recipe-Generation-from-Food-Image
 
