@@ -1,30 +1,32 @@
 # Use an official Python runtime as a parent image
 FROM python:3.9-slim
 
-# Set the working directory in the container
-WORKDIR /app
-
 # Install system dependencies for OpenCV and PyTorch (if needed)
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Set up user 1000 as per Hugging Face Spaces guidelines
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user
+ENV PATH=/home/user/.local/bin:$PATH
+WORKDIR $HOME/app
+
+# Copy the current directory contents into the container and set ownership to user 1000
+COPY --chown=1000:1000 . $HOME/app
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Download model weights during build phase
-RUN python download_models.py
-
-# Make port 10000 available to the world outside this container
+# Make port 10000 available
 EXPOSE 10000
 
 # Set environment variables
 ENV FLASK_APP=run.py
 ENV PORT=10000
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", "1", "--timeout", "200", "run:app"]
+# Run model download at container startup (has internet access) and launch gunicorn
+CMD python download_models.py && gunicorn --bind 0.0.0.0:10000 --workers 1 --timeout 200 run:app
+
