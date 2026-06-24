@@ -28,6 +28,8 @@ def predict():
 def predictsample(samplefoodname):
     # Sample images live in static/images/
     imagefile = os.path.join(app.root_path, 'static', 'images', f"{samplefoodname}.jpg")
+    if not os.path.exists(imagefile):
+        return "File not found", 404
     img = "images/" + str(samplefoodname) + ".jpg"
     title,ingredients,recipe = output(imagefile)
     return render_template('predict.html',title=title,ingredients=ingredients,recipe=recipe,img=img)
