@@ -39,6 +39,12 @@ def _get_assets():
     # Ensure data directory exists
     os.makedirs(_DATA_DIR, exist_ok=True)
     
+    expected_sizes = {
+        'modelbest.ckpt': 415464764,
+        'ingr_vocab.pkl': 30658,
+        'instr_vocab.pkl': 464869
+    }
+    
     # Files to download if they don't exist
     files_to_download = {
         'modelbest.ckpt': 'https://dl.fbaipublicfiles.com/inversecooking/modelbest.ckpt',
@@ -48,10 +54,46 @@ def _get_assets():
     
     for filename, url in files_to_download.items():
         filepath = os.path.join(_DATA_DIR, filename)
-        if not os.path.exists(filepath):
-            print(f"Downloading {filename}...")
-            urllib.request.urlretrieve(url, filepath)
-            print(f"Downloaded {filename}.")
+        expected_size = expected_sizes.get(filename)
+        
+        # Verify existing file size/integrity
+        if os.path.exists(filepath):
+            actual_size = os.path.getsize(filepath)
+            if expected_size is None or actual_size == expected_size:
+                continue
+            else:
+                print(f"{filename} size mismatch (expected {expected_size}, got {actual_size}). Re-downloading...")
+                try:
+                    os.remove(filepath)
+                except Exception as e:
+                    print(f"Failed to remove corrupt file {filename}: {e}")
+                    continue
+
+        tmp_filepath = filepath + '.tmp'
+        if os.path.exists(tmp_filepath):
+            try:
+                os.remove(tmp_filepath)
+            except Exception:
+                pass
+
+        print(f"Downloading {filename}...")
+        try:
+            urllib.request.urlretrieve(url, tmp_filepath)
+            # Verify size
+            if expected_size is not None:
+                actual_size = os.path.getsize(tmp_filepath)
+                if actual_size != expected_size:
+                    raise ValueError(f"Downloaded file size mismatch (expected {expected_size}, got {actual_size})")
+            os.rename(tmp_filepath, filepath)
+            print(f"Downloaded and verified {filename}.")
+        except Exception as e:
+            print(f"Error downloading {filename}: {e}")
+            if os.path.exists(tmp_filepath):
+                try:
+                    os.remove(tmp_filepath)
+                except Exception:
+                    pass
+            raise e
 
     use_gpu = True
     _DEVICE = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
